@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT id="rdLHwu" name="MidiController" projectType="audioplug" jucerVersion="5.4.3"
-              pluginCharacteristicsValue="pluginProducesMidiOut,pluginWantsMidiIn">
+              pluginCharacteristicsValue="pluginProducesMidiOut,pluginWantsMidiIn"
+              pluginAUMainType="'aumi'" companyName="yourcompany">
   <MAINGROUP id="BCbu3I" name="MidiController">
     <GROUP id="{5DB22273-A5CF-4EA5-24BF-97F4C9A56B99}" name="Source">
       <FILE id="stkpKY" name="PluginProcessor.cpp" compile="1" resource="0"

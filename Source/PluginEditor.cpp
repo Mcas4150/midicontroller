@@ -21,14 +21,38 @@ MidiControllerAudioProcessorEditor::MidiControllerAudioProcessorEditor (MidiCont
     bassDrumButton.setButtonText ("Bass Drum (36)");
     bassDrumButton.onClick = [this] { setNoteNumber (36); };
     
-    addAndMakeVisible (volumeSlider);
-    volumeSlider.setRange (0, 127, 1);
-    volumeSlider.onValueChange = [this]
+    addAndMakeVisible (filter1CutoffSlider);
+    filter1CutoffSlider.setSliderStyle(Slider::SliderStyle::RotaryHorizontalVerticalDrag);
+    filter1CutoffSlider.setRange (0, 127, 1);
+    filter1CutoffSlider.onValueChange = [this]
     {
-        auto message = MidiMessage::controllerEvent (midiChannel, 50, (int) volumeSlider.getValue());
+        auto message = MidiMessage::controllerEvent (midiChannel, 50, (int) filter1CutoffSlider.getValue());
         message.setTimeStamp (Time::getMillisecondCounterHiRes() * 0.001 - startTime);
-        addMessageToList (message);
+        addMessageToBuffer (message);
     };
+    
+    addAndMakeVisible (filter1ResonanceSlider);
+    filter1ResonanceSlider.setSliderStyle(Slider::SliderStyle::RotaryHorizontalVerticalDrag);
+    filter1ResonanceSlider.setRange (0, 127, 1);
+    filter1ResonanceSlider.onValueChange = [this]
+    {
+        auto message = MidiMessage::controllerEvent (midiChannel, 56, (int) filter1ResonanceSlider.getValue());
+        message.setTimeStamp (Time::getMillisecondCounterHiRes() * 0.001 - startTime);
+        addMessageToBuffer (message);
+    };
+    
+    filter1TypeMenu.addItem("24dB LP", 1);
+    filter1TypeMenu.addItem("12db LP", 2);
+    filter1TypeMenu.addItem("24dB BP", 3);
+    filter1TypeMenu.addItem("12dB BP", 4);
+    filter1TypeMenu.addItem("12dB HP", 5);
+    filter1TypeMenu.addItem("Sin(X)>LP", 6);
+    filter1TypeMenu.addItem("Waveshaper", 7);
+    filter1TypeMenu.addItem("Dual", 8);
+    filter1TypeMenu.addItem("FM-Filter", 9);
+    filter1TypeMenu.addItem("S&H->L12dB", 10);
+//    filter1TypeMenu.setJustificationType(Justification::centred);
+    addAndMakeVisible(&filter1TypeMenu);
     
     addAndMakeVisible (midiMessagesBox);
     midiMessagesBox.setMultiLine (true);
@@ -41,7 +65,8 @@ MidiControllerAudioProcessorEditor::MidiControllerAudioProcessorEditor (MidiCont
     midiMessagesBox.setColour (TextEditor::outlineColourId, Colour (0x1c000000));
     midiMessagesBox.setColour (TextEditor::shadowColourId, Colour (0x16000000));
     
-    setSize (800, 300);
+    setSize (1000, 600);
+    startTimer (1);
 }
 
 MidiControllerAudioProcessorEditor::~MidiControllerAudioProcessorEditor()
@@ -63,40 +88,15 @@ void MidiControllerAudioProcessorEditor::resized()
 {
     auto halfWidth = getWidth() / 2;
     
-    auto buttonsBounds = getLocalBounds().withWidth (halfWidth).reduced (10);
+    auto buttonsBounds = getLocalBounds().withWidth (halfWidth).reduced (10) /  4;
    
     bassDrumButton   .setBounds (buttonsBounds.getX(), 10,  buttonsBounds.getWidth(), 20);
-    volumeSlider     .setBounds (buttonsBounds.getX(), 220, buttonsBounds.getWidth(), 20);
+    filter1CutoffSlider     .setBounds (buttonsBounds.getX() , 160, buttonsBounds.getWidth(), 80);
+    filter1ResonanceSlider     .setBounds (buttonsBounds.getX(), 260, buttonsBounds.getWidth(), 80);
+    filter1TypeMenu .setBounds (buttonsBounds.getX(), 340, buttonsBounds.getWidth(), 40);
     
     midiMessagesBox.setBounds (getLocalBounds().withWidth (halfWidth).withX (halfWidth).reduced (10));
 }
-
-
-static String getMidiMessageDescription (const MidiMessage& m)
-{
-    if (m.isNoteOn())           return "Note on "          + MidiMessage::getMidiNoteName (m.getNoteNumber(), true, true, 3);
-    if (m.isNoteOff())          return "Note off "         + MidiMessage::getMidiNoteName (m.getNoteNumber(), true, true, 3);
-    if (m.isProgramChange())    return "Program change "   + String (m.getProgramChangeNumber());
-    if (m.isPitchWheel())       return "Pitch wheel "      + String (m.getPitchWheelValue());
-    if (m.isAftertouch())       return "After touch "      + MidiMessage::getMidiNoteName (m.getNoteNumber(), true, true, 3) +  ": " + String (m.getAfterTouchValue());
-    if (m.isChannelPressure())  return "Channel pressure " + String (m.getChannelPressureValue());
-    if (m.isAllNotesOff())      return "All notes off";
-    if (m.isAllSoundOff())      return "All sound off";
-    if (m.isMetaEvent())        return "Meta event";
-    
-    if (m.isController())
-    {
-        String name (MidiMessage::getControllerName (m.getControllerNumber()));
-        
-        if (name.isEmpty())
-            name = "[" + String (m.getControllerNumber()) + "]";
-        
-        return "Controller " + name + ": " + String (m.getControllerValue());
-    }
-    
-    return String::toHexString (m.getRawData(), m.getRawDataSize());
-    }
-
 
 void MidiControllerAudioProcessorEditor::setNoteNumber (int noteNumber)
 {
@@ -126,5 +126,32 @@ void  MidiControllerAudioProcessorEditor::addMessageToList (const MidiMessage& m
                                        seconds,
                                        millis);
     
-    logMessage (timecode + "  -  " + getMidiMessageDescription (message));
+    logMessage (timecode + "  -  " + message.getDescription());
+}
+
+void MidiControllerAudioProcessorEditor::addMessageToBuffer (const MidiMessage& message)
+{
+    auto timestamp = message.getTimeStamp();
+    auto sampleNumber =  (int) (timestamp * sampleRate);
+    midiBuffer.addEvent (message, sampleNumber);
+}
+
+void MidiControllerAudioProcessorEditor::timerCallback()
+{
+    auto currentTime = Time::getMillisecondCounterHiRes() * 0.001 - startTime;
+    auto currentSampleNumber = (int) (currentTime * sampleRate); // [4]
+    MidiBuffer::Iterator iterator (midiBuffer);
+    MidiMessage message;
+    int sampleNumber;
+    while (iterator.getNextEvent (message, sampleNumber)) // [5]
+    {
+        if (sampleNumber > currentSampleNumber)           // [6]
+            break;
+        message.setTimeStamp (sampleNumber / sampleRate); // [7]
+        addMessageToList (message);
     }
+    midiBuffer.clear (previousSampleNumber, currentSampleNumber - previousSampleNumber); // [8]
+    previousSampleNumber = currentSampleNumber;                                          // [9]
+}
+//
+//void MidiControllerAudioProcessorEditor::handleMessage (int ccNumber, const)

@@ -134,7 +134,16 @@ void MidiControllerAudioProcessor::processBlock (AudioBuffer<float>& buffer, Mid
     ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
+    const int numSamples = buffer.getNumSamples();
 
+    
+    for (int i = 0; i < numSamples; ++i)
+    {
+    // MIDIBUFFER DATA GOES HERE?
+        
+        
+        
+    }
     // In case we have more outputs than inputs, this code clears any output
     // channels that didn't contain input data, (because these aren't
     // guaranteed to be empty - they may contain garbage).
@@ -150,10 +159,14 @@ void MidiControllerAudioProcessor::processBlock (AudioBuffer<float>& buffer, Mid
     // the samples and the outer loop is handling the channels.
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
+    
+    
+    
+    
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
-
+            
         // ..do something to the data...
     }
 }
